@@ -4,28 +4,28 @@ import numpy as np
 import plotly.express as px
 import plotly.figure_factory as ff
 from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
+from xgboost import XGBClassifier
 
-st.set_page_config(page_title="Real Fraud Detection AI", layout="wide")
+st.set_page_config(page_title="XGBoost Fraud Detection", layout="wide")
 
-st.title("💳 Real Credit Card Fraud Detection (ML + Real Dataset)")
+st.title("💳 Real-Time Fraud Detection using XGBoost (AI Model)")
 
 # -----------------------------
 # Load dataset
 # -----------------------------
 @st.cache_data
 def load_data():
-    df = pd.read_csv("creditcard.csv")  # upload file in same folder
+    df = pd.read_csv("creditcard.csv")
     return df
 
 df = load_data()
 
-st.subheader("Dataset Overview")
-st.write(df.head())
+st.subheader("Dataset Preview")
+st.dataframe(df.head())
 
 # -----------------------------
-# Train Model
+# Train XGBoost Model
 # -----------------------------
 @st.cache_resource
 def train_model(data):
@@ -40,9 +40,12 @@ def train_model(data):
         stratify=y
     )
 
-    model = RandomForestClassifier(
+    model = XGBClassifier(
         n_estimators=100,
-        random_state=42
+        max_depth=5,
+        learning_rate=0.1,
+        eval_metric="logloss",
+        use_label_encoder=False
     )
 
     model.fit(X_train, y_train)
@@ -60,10 +63,9 @@ model, accuracy, y_test, y_pred = train_model(df)
 # -----------------------------
 st.subheader("Model Performance")
 
-col1, col2 = st.columns(2)
-
-col1.metric("Accuracy", f"{accuracy:.4f}")
-col2.metric("Dataset Size", df.shape[0])
+c1, c2 = st.columns(2)
+c1.metric("Accuracy", f"{accuracy:.4f}")
+c2.metric("Dataset Size", df.shape[0])
 
 # -----------------------------
 # Confusion Matrix
@@ -74,14 +76,14 @@ fig = ff.create_annotated_heatmap(
     z=cm,
     x=["Normal", "Fraud"],
     y=["Normal", "Fraud"],
-    colorscale="Blues"
+    colorscale="Viridis"
 )
 
 st.subheader("Confusion Matrix")
 st.plotly_chart(fig, use_container_width=True)
 
 # -----------------------------
-# Fraud vs Normal
+# Fraud Distribution
 # -----------------------------
 fraud = len(df[df["Class"] == 1])
 normal = len(df[df["Class"] == 0])
@@ -89,15 +91,15 @@ normal = len(df[df["Class"] == 0])
 fig2 = px.pie(
     names=["Normal", "Fraud"],
     values=[normal, fraud],
-    title="Class Distribution"
+    title="Fraud vs Normal Transactions"
 )
 
 st.plotly_chart(fig2, use_container_width=True)
 
 # -----------------------------
-# Live Prediction Section
+# Live Prediction Input
 # -----------------------------
-st.subheader("🔍 Test Your Own Transaction")
+st.subheader("🔍 Test Transaction")
 
 input_data = {}
 
@@ -109,9 +111,9 @@ if st.button("Predict Fraud"):
 
     input_df = pd.DataFrame([input_data])
 
-    prediction = model.predict(input_df)[0]
+    pred = model.predict(input_df)[0]
 
-    if prediction == 1:
+    if pred == 1:
         st.error("🚨 FRAUD DETECTED")
     else:
         st.success("✅ NORMAL TRANSACTION")
@@ -122,6 +124,4 @@ if st.button("Predict Fraud"):
 st.subheader("Classification Report")
 
 report = classification_report(y_test, y_pred, output_dict=True)
-report_df = pd.DataFrame(report).transpose()
-
-st.dataframe(report_df)
+st.dataframe(pd.DataFrame(report).transpose())
