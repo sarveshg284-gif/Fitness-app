@@ -1,7 +1,8 @@
+streamlit
 pandas
 numpy
 scikit-learn
-kafka-python
-streamlit
 joblib
-pyspark
+kafka-python
+plotly
+streamlit-autorefresh
