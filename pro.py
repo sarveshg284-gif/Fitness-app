@@ -2,11 +2,13 @@ import streamlit as st
 import pandas as pd
 import pickle
 import plotly.express as px
+import os
 
-from parser import extract_text
-from skill import extract_skills
-from score import calculate_ats_score
+import parser
+import skill
+import score
 
+# ---------------- PAGE CONFIG ----------------
 st.set_page_config(
     page_title="AI Resume Screening System",
     page_icon="📄",
@@ -15,9 +17,16 @@ st.set_page_config(
 
 st.title("📄 AI Resume Screening & Job Recommendation System")
 
-# Load model
-model = pickle.load(open("models/role_prediction.pkl", "rb"))
+# ---------------- LOAD MODEL ----------------
+MODEL_PATH = "models/role_prediction.pkl"
 
+if os.path.exists(MODEL_PATH):
+    model = pickle.load(open(MODEL_PATH, "rb"))
+else:
+    st.error("❌ Model not found. Run train.py first.")
+    st.stop()
+
+# ---------------- SKILL LIST ----------------
 skill_list = [
     "python",
     "sql",
@@ -35,83 +44,63 @@ skill_list = [
     "spark"
 ]
 
+# ---------------- UPLOAD FILE ----------------
 uploaded_file = st.file_uploader(
-    "Upload Resume",
+    "Upload Resume (PDF/DOCX)",
     type=["pdf", "docx"]
 )
 
 if uploaded_file:
 
-    text = extract_text(uploaded_file)
+    # Extract text
+    text = parser.extract_text(uploaded_file)
 
-    st.subheader("Resume Preview")
-
+    st.subheader("📄 Resume Preview")
     with st.expander("View Resume Text"):
         st.write(text[:5000])
 
-    skills = extract_skills(text)
+    # Extract skills
+    skills = skill.extract_skills(text)
 
-    st.subheader("Extracted Skills")
+    st.subheader("🧠 Extracted Skills")
 
     if skills:
         st.success(", ".join(skills))
     else:
         st.warning("No skills found")
 
-    ats_score = calculate_ats_score(
-    skills,
-    text
-        )
+    # ATS Score
+    ats_score = score.calculate_ats_score(skills, text)
 
-    st.subheader("ATS Score")
-
+    st.subheader("📊 ATS Score")
     st.progress(ats_score / 100)
-    st.metric("ATS Score", f"{ats_score}%")
+    st.metric("Score", f"{ats_score}%")
 
-    feature_vector = []
+    # Feature vector for ML model
+    feature_vector = [
+        1 if s in skills else 0 for s in skill_list
+    ]
 
-    for skill in skill_list:
-        if skill in skills:
-            feature_vector.append(1)
-        else:
-            feature_vector.append(0)
-
+    # Prediction
     prediction = model.predict([feature_vector])[0]
 
-    st.subheader("Predicted Job Role")
-
+    st.subheader("🎯 Predicted Job Role")
     st.success(prediction)
 
+    # Recommendations
     recommendations = {
-        "Data Scientist": [
-            "Machine Learning Engineer",
-            "AI Engineer",
-            "Data Scientist"
-        ],
-        "Data Analyst": [
-            "Business Analyst",
-            "Data Analyst",
-            "Reporting Analyst"
-        ],
-        "Data Engineer": [
-            "Data Engineer",
-            "Big Data Engineer",
-            "Cloud Engineer"
-        ],
-        "AI Engineer": [
-            "AI Engineer",
-            "NLP Engineer",
-            "Deep Learning Engineer"
-        ]
+        "Data Scientist": ["ML Engineer", "AI Engineer", "Data Scientist"],
+        "Data Analyst": ["Business Analyst", "Data Analyst", "Reporting Analyst"],
+        "Data Engineer": ["Data Engineer", "Big Data Engineer", "Cloud Engineer"],
+        "AI Engineer": ["AI Engineer", "NLP Engineer", "Deep Learning Engineer"]
     }
 
-    st.subheader("Recommended Jobs")
+    st.subheader("💼 Recommended Jobs")
 
-    jobs = recommendations.get(prediction, [])
-
-    for job in jobs:
+    for job in recommendations.get(prediction, []):
         st.write("✅", job)
 
+    # Skill chart
     chart_data = pd.DataFrame({
         "Skills": skill_list,
         "Available": feature_vector
@@ -127,30 +116,29 @@ if uploaded_file:
 
     st.plotly_chart(fig, use_container_width=True)
 
-    missing = []
+    # Missing skills
+    missing = [s for s in skill_list if s not in skills]
 
-    for skill in skill_list:
-        if skill not in skills:
-            missing.append(skill)
+    st.subheader("⚠️ Missing Skills")
 
-    st.subheader("Missing Skills")
+    if missing:
+        st.warning(", ".join(missing[:10]))
 
-    st.warning(", ".join(missing[:10]))
-
+    # Download report
     report = f"""
-    ATS Score: {ats_score}
+ATS SCORE: {ats_score}
 
-    Predicted Role: {prediction}
+PREDICTED ROLE: {prediction}
 
-    Skills:
-    {', '.join(skills)}
+SKILLS FOUND:
+{', '.join(skills)}
 
-    Missing Skills:
-    {', '.join(missing)}
-    """
+MISSING SKILLS:
+{', '.join(missing)}
+"""
 
     st.download_button(
-        "Download Report",
+        "📥 Download Report",
         report,
         file_name="resume_report.txt"
     )
