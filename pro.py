@@ -58,7 +58,10 @@ if uploaded_file:
     else:
         st.warning("No skills found")
 
-    ats_score = calculate_ats_score(skills)
+    ats_score = calculate_ats_score(
+    skills,
+    text
+        )
 
     st.subheader("ATS Score")
 
