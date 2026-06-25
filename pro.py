@@ -6,6 +6,15 @@ import plotly.figure_factory as ff
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
 from xgboost import XGBClassifier
+import os
+
+file_path = "creditcard.csv"
+
+if not os.path.exists(file_path):
+    st.error("creditcard.csv NOT FOUND. Please upload it to GitHub repo.")
+    st.stop()
+
+df = pd.read_csv(file_path)
 
 st.set_page_config(page_title="XGBoost Fraud Detection", layout="wide")
 
