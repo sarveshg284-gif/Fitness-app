@@ -1,136 +1,153 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
+import pickle
 import plotly.express as px
-import plotly.figure_factory as ff
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
-from xgboost import XGBClassifier
-import os
 
-file_path = "creditcard.csv"
+from utils.parser import extract_text
+from utils.skill_extractor import extract_skills
+from utils.ats_score import calculate_ats_score
 
-if not os.path.exists(file_path):
-    st.error("creditcard.csv NOT FOUND. Please upload it to GitHub repo.")
-    st.stop()
-
-df = pd.read_csv(file_path)
-
-st.set_page_config(page_title="XGBoost Fraud Detection", layout="wide")
-
-st.title("💳 Real-Time Fraud Detection using XGBoost (AI Model)")
-
-# -----------------------------
-# Load dataset
-# -----------------------------
-@st.cache_data
-def load_data():
-    df = pd.read_csv("creditcard.csv")
-    return df
-
-df = load_data()
-
-st.subheader("Dataset Preview")
-st.dataframe(df.head())
-
-# -----------------------------
-# Train XGBoost Model
-# -----------------------------
-@st.cache_resource
-def train_model(data):
-
-    X = data.drop("Class", axis=1)
-    y = data["Class"]
-
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y,
-        test_size=0.2,
-        random_state=42,
-        stratify=y
-    )
-
-    model = XGBClassifier(
-        n_estimators=100,
-        max_depth=5,
-        learning_rate=0.1,
-        eval_metric="logloss",
-        use_label_encoder=False
-    )
-
-    model.fit(X_train, y_train)
-
-    y_pred = model.predict(X_test)
-
-    acc = accuracy_score(y_test, y_pred)
-
-    return model, acc, y_test, y_pred
-
-model, accuracy, y_test, y_pred = train_model(df)
-
-# -----------------------------
-# Metrics
-# -----------------------------
-st.subheader("Model Performance")
-
-c1, c2 = st.columns(2)
-c1.metric("Accuracy", f"{accuracy:.4f}")
-c2.metric("Dataset Size", df.shape[0])
-
-# -----------------------------
-# Confusion Matrix
-# -----------------------------
-cm = confusion_matrix(y_test, y_pred)
-
-fig = ff.create_annotated_heatmap(
-    z=cm,
-    x=["Normal", "Fraud"],
-    y=["Normal", "Fraud"],
-    colorscale="Viridis"
+st.set_page_config(
+    page_title="AI Resume Screening System",
+    page_icon="📄",
+    layout="wide"
 )
 
-st.subheader("Confusion Matrix")
-st.plotly_chart(fig, use_container_width=True)
+st.title("📄 AI Resume Screening & Job Recommendation System")
 
-# -----------------------------
-# Fraud Distribution
-# -----------------------------
-fraud = len(df[df["Class"] == 1])
-normal = len(df[df["Class"] == 0])
+# Load model
+model = pickle.load(open("models/role_prediction.pkl", "rb"))
 
-fig2 = px.pie(
-    names=["Normal", "Fraud"],
-    values=[normal, fraud],
-    title="Fraud vs Normal Transactions"
+skill_list = [
+    "python",
+    "sql",
+    "machine learning",
+    "deep learning",
+    "data analysis",
+    "power bi",
+    "tableau",
+    "excel",
+    "aws",
+    "nlp",
+    "tensorflow",
+    "pytorch",
+    "statistics",
+    "spark"
+]
+
+uploaded_file = st.file_uploader(
+    "Upload Resume",
+    type=["pdf", "docx"]
 )
 
-st.plotly_chart(fig2, use_container_width=True)
+if uploaded_file:
 
-# -----------------------------
-# Live Prediction Input
-# -----------------------------
-st.subheader("🔍 Test Transaction")
+    text = extract_text(uploaded_file)
 
-input_data = {}
+    st.subheader("Resume Preview")
 
-for col in df.columns:
-    if col != "Class":
-        input_data[col] = st.number_input(col, value=float(df[col].mean()))
+    with st.expander("View Resume Text"):
+        st.write(text[:5000])
 
-if st.button("Predict Fraud"):
+    skills = extract_skills(text)
 
-    input_df = pd.DataFrame([input_data])
+    st.subheader("Extracted Skills")
 
-    pred = model.predict(input_df)[0]
-
-    if pred == 1:
-        st.error("🚨 FRAUD DETECTED")
+    if skills:
+        st.success(", ".join(skills))
     else:
-        st.success("✅ NORMAL TRANSACTION")
+        st.warning("No skills found")
 
-# -----------------------------
-# Classification Report
-# -----------------------------
-st.subheader("Classification Report")
+    ats_score = calculate_ats_score(skills)
 
-report = classification_report(y_test, y_pred, output_dict=True)
-st.dataframe(pd.DataFrame(report).transpose())
+    st.subheader("ATS Score")
+
+    st.progress(ats_score / 100)
+    st.metric("ATS Score", f"{ats_score}%")
+
+    feature_vector = []
+
+    for skill in skill_list:
+        if skill in skills:
+            feature_vector.append(1)
+        else:
+            feature_vector.append(0)
+
+    prediction = model.predict([feature_vector])[0]
+
+    st.subheader("Predicted Job Role")
+
+    st.success(prediction)
+
+    recommendations = {
+        "Data Scientist": [
+            "Machine Learning Engineer",
+            "AI Engineer",
+            "Data Scientist"
+        ],
+        "Data Analyst": [
+            "Business Analyst",
+            "Data Analyst",
+            "Reporting Analyst"
+        ],
+        "Data Engineer": [
+            "Data Engineer",
+            "Big Data Engineer",
+            "Cloud Engineer"
+        ],
+        "AI Engineer": [
+            "AI Engineer",
+            "NLP Engineer",
+            "Deep Learning Engineer"
+        ]
+    }
+
+    st.subheader("Recommended Jobs")
+
+    jobs = recommendations.get(prediction, [])
+
+    for job in jobs:
+        st.write("✅", job)
+
+    chart_data = pd.DataFrame({
+        "Skills": skill_list,
+        "Available": feature_vector
+    })
+
+    fig = px.bar(
+        chart_data,
+        x="Skills",
+        y="Available",
+        color="Available",
+        title="Skill Analysis"
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+    missing = []
+
+    for skill in skill_list:
+        if skill not in skills:
+            missing.append(skill)
+
+    st.subheader("Missing Skills")
+
+    st.warning(", ".join(missing[:10]))
+
+    report = f"""
+    ATS Score: {ats_score}
+
+    Predicted Role: {prediction}
+
+    Skills:
+    {', '.join(skills)}
+
+    Missing Skills:
+    {', '.join(missing)}
+    """
+
+    st.download_button(
+        "Download Report",
+        report,
+        file_name="resume_report.txt"
+    )
