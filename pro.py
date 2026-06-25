@@ -3,9 +3,9 @@ import pandas as pd
 import pickle
 import plotly.express as px
 
-from utils.parser import extract_text
-from utils.skill_extractor import extract_skills
-from utils.ats_score import calculate_ats_score
+from parser import extract_text
+from skill import extract_skills
+from score import calculate_ats_score
 
 st.set_page_config(
     page_title="AI Resume Screening System",
